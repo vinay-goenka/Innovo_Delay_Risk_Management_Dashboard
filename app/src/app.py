@@ -67,6 +67,77 @@ div[data-testid="stNumberInput"] input {
     border-radius: 16px;
     min-height: 220px;
 }
+.insight-card {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 16px;
+    border-radius: 14px;
+    margin-bottom: 10px;
+}
+.card-title {
+    font-weight: 700;
+    font-size: 16px;
+    margin-bottom: 6px;
+}
+.card-detail {
+    color: #9ca3af;
+    font-size: 14px;
+}
+.section-card {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 22px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.03);
+    margin-bottom: 18px;
+}
+.scenario-card {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 18px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.95), rgba(17, 24, 39, 0.95));
+    text-align: center;
+}
+.scenario-label {
+    color: #9ca3af;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+.scenario-value {
+    font-size: 38px;
+    font-weight: 800;
+}
+.scenario-note {
+    color: #9ca3af;
+    font-size: 14px;
+    margin-top: 12px;
+}
+.action-row {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 16px;
+    border-radius: 14px;
+    margin-bottom: 10px;
+    background: rgba(255, 255, 255, 0.03);
+}
+.action-number {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+    flex-shrink: 0;
+}
+.action-text {
+    color: #d1d5db;
+    font-size: 15px;
+    line-height: 1.45;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -115,14 +186,14 @@ with left:
     c1, c2 = st.columns(2)
 
     with c1:
-        planned_progress = st.number_input("Planned Progress (%)", 0, 100, 40)
-        actual_progress = st.number_input("Actual Progress (%)", 0, 100, 30)
-        budget_used = st.number_input("Budget Used (%)", 0, 100, 45)
-        material_delay_days = st.number_input("Material Delay Days", 0, 365, 5)
+        planned_progress = st.number_input("Planned Progress (%)", 0, 100, 55)
+        actual_progress = st.number_input("Actual Progress (%)", 0, 100, 43)
+        budget_used = st.number_input("Budget Used (%)", 0, 100, 58)
+        material_delay_days = st.number_input("Material Delay Days", 0, 365, 7)
 
     with c2:
-        labor_planned = st.number_input("Planned Labor", 1, 1000, 100)
-        labor_actual = st.number_input("Actual Labor", 0, 1000, 80)
+        labor_planned = st.number_input("Planned Labor", 1, 1000, 120)
+        labor_actual = st.number_input("Actual Labor", 0, 1000, 92)
         inspection_failures = st.number_input("Inspection Failures", 0, 20, 1)
 
     predict_button = st.button("Predict Delay Risk", use_container_width=True)
@@ -140,6 +211,46 @@ new_project = pd.DataFrame([{
 }])
 
 risk = model.predict_proba(new_project)[0][1] * 100
+
+estimated_delay_days = max(0, round((schedule_gap * 0.8) + (material_delay_days * 0.9) + (inspection_failures * 2)))
+estimated_daily_cost = 15000
+estimated_cost_exposure = estimated_delay_days * estimated_daily_cost
+
+improved_labor_actual = min(labor_planned, labor_actual + 15)
+improved_material_delay_days = max(0, material_delay_days - 3)
+improved_inspection_failures = max(0, inspection_failures - 1)
+improved_labor_shortage_pct = ((labor_planned - improved_labor_actual) / labor_planned) * 100
+
+scenario_project = pd.DataFrame([{
+    "schedule_gap": max(0, schedule_gap - 4),
+    "labor_shortage_pct": improved_labor_shortage_pct,
+    "material_delay_days": improved_material_delay_days,
+    "inspection_failures": improved_inspection_failures,
+    "cost_pressure": max(0, cost_pressure - 3)
+}])
+
+scenario_risk = model.predict_proba(scenario_project)[0][1] * 100
+risk_reduction = risk - scenario_risk
+
+recommended_actions = []
+
+if schedule_gap > 10:
+    recommended_actions.append("Recover schedule by adding short-term labor support or extending shifts on critical activities.")
+
+if labor_shortage_pct > 20:
+    recommended_actions.append(f"Increase actual labor from {labor_actual} to at least {improved_labor_actual} workers for the next two weeks.")
+
+if material_delay_days > 5:
+    recommended_actions.append(f"Escalate procurement and reduce material delay from {material_delay_days} days to {improved_material_delay_days} days through supplier follow-up or backup vendors.")
+
+if inspection_failures > 0:
+    recommended_actions.append("Run a quality-control check before the next inspection to reduce rework and approval delays.")
+
+if cost_pressure > 10:
+    recommended_actions.append("Review cost categories with the largest overruns and freeze non-critical spending until progress catches up.")
+
+if len(recommended_actions) == 0:
+    recommended_actions.append("Continue regular monitoring. No major intervention is currently required.")
 
 if risk >= 70:
     risk_label = "High Risk"
@@ -182,6 +293,17 @@ with right:
         m4, m5 = st.columns(2)
         m4.metric("Material Delay", f"{material_delay_days} days")
         m5.metric("Inspection Failures", inspection_failures)
+
+        st.divider()
+
+        st.subheader("Business Impact Estimate")
+
+        b1, b2, b3 = st.columns(3)
+        b1.metric("Estimated Delay", f"{estimated_delay_days} days")
+        b2.metric("Daily Cost Assumption", f"${estimated_daily_cost:,.0f}")
+        b3.metric("Estimated Cost Exposure", f"${estimated_cost_exposure:,.0f}")
+
+        st.caption("Cost exposure is an estimate based on predicted delay days multiplied by an assumed daily delay cost.")
 
     else:
         st.markdown("""
@@ -252,6 +374,69 @@ else:
 
     for _, row in fallback_importance_df.iterrows():
         st.write(f"**{row['Risk Driver']}** — {row['Importance']}% model importance")
+
+st.subheader("Recommended Intervention")
+
+st.markdown("""
+<div class="section-card">
+    <div class="card-title">Priority Actions</div>
+    <div class="card-detail">Recommended actions are generated from the project’s strongest operational risk signals.</div>
+</div>
+""", unsafe_allow_html=True)
+
+for index, action in enumerate(recommended_actions, start=1):
+    st.markdown(f"""
+    <div class="action-row">
+        <div class="action-number">{index}</div>
+        <div class="action-text">{action}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.subheader("Scenario Simulation")
+
+st.markdown("""
+<div class="section-card">
+    <div class="card-title">What-if management takes corrective action?</div>
+    <div class="card-detail">The simulation estimates how the delay-risk score could change after operational improvements.</div>
+</div>
+""", unsafe_allow_html=True)
+
+s1, s2, s3 = st.columns(3)
+
+with s1:
+    st.markdown(f"""
+    <div class="scenario-card">
+        <div class="scenario-label">Current Risk</div>
+        <div class="scenario-value">{risk:.1f}%</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with s2:
+    st.markdown(f"""
+    <div class="scenario-card">
+        <div class="scenario-label">Simulated Risk</div>
+        <div class="scenario-value">{scenario_risk:.1f}%</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with s3:
+    st.markdown(f"""
+    <div class="scenario-card">
+        <div class="scenario-label">Potential Reduction</div>
+        <div class="scenario-value">{risk_reduction:.1f}%</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown(f"""
+<div class="section-card">
+    <div class="card-title">Simulation Assumptions</div>
+    <div class="card-detail">
+        Labor increases to {improved_labor_actual}, material delay falls to {improved_material_delay_days} days, inspection failures fall to {improved_inspection_failures}, schedule gap improves by 4%, and cost pressure improves by 3%.
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+st.divider()
 
 st.subheader("Suggested Action Plan")
 
