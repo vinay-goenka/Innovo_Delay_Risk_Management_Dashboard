@@ -7,7 +7,8 @@ st.set_page_config(page_title="Construction Risk Predictor", layout="wide")
 st.markdown("""
 <style>
 .block-container {
-    padding-top: 2rem;
+    padding-top: 1.5rem;
+    max-width: 1300px;
 }
 div[data-testid="stNumberInput"] {
     max-width: 180px;
@@ -17,18 +18,19 @@ div[data-testid="stNumberInput"] input {
     padding: 6px 8px;
 }
 .metric-card {
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    padding: 24px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    border: 1px solid rgba(96, 165, 250, 0.22);
+    padding: 28px;
+    border-radius: 18px;
+    background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 35%), linear-gradient(135deg, #1f2937 0%, #111827 100%);
     color: white;
-    min-height: 220px;
+    min-height: 240px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
 }
 .big-risk {
-    font-size: 54px;
-    font-weight: 800;
-    margin-top: 8px;
-    margin-bottom: 8px;
+    font-size: 58px;
+    font-weight: 900;
+    margin-top: 10px;
+    margin-bottom: 10px;
 }
 .small-text {
     color: #d1d5db;
@@ -66,6 +68,7 @@ div[data-testid="stNumberInput"] input {
     padding: 24px;
     border-radius: 16px;
     min-height: 220px;
+    background: rgba(255, 255, 255, 0.03);
 }
 .insight-card {
     border: 1px solid rgba(255, 255, 255, 0.12);
@@ -84,17 +87,18 @@ div[data-testid="stNumberInput"] input {
 }
 .section-card {
     border: 1px solid rgba(255, 255, 255, 0.12);
-    padding: 22px;
+    padding: 20px;
     border-radius: 18px;
-    background: rgba(255, 255, 255, 0.03);
-    margin-bottom: 18px;
+    background: rgba(255, 255, 255, 0.035);
+    margin-bottom: 16px;
 }
 .scenario-card {
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    padding: 18px;
+    border: 1px solid rgba(96, 165, 250, 0.16);
+    padding: 20px;
     border-radius: 16px;
     background: linear-gradient(135deg, rgba(31, 41, 55, 0.95), rgba(17, 24, 39, 0.95));
     text-align: center;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
 }
 .scenario-label {
     color: #9ca3af;
@@ -119,7 +123,7 @@ div[data-testid="stNumberInput"] input {
     padding: 16px;
     border-radius: 14px;
     margin-bottom: 10px;
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.035);
 }
 .action-number {
     width: 30px;
@@ -133,10 +137,18 @@ div[data-testid="stNumberInput"] input {
     color: #93c5fd;
     flex-shrink: 0;
 }
+}
 .action-text {
     color: #d1d5db;
     font-size: 15px;
     line-height: 1.45;
+}
+.driver-card {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 14px 16px;
+    border-radius: 14px;
+    margin-bottom: 8px;
+    background: rgba(255, 255, 255, 0.03);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -197,6 +209,20 @@ with left:
         inspection_failures = st.number_input("Inspection Failures", 0, 20, 1)
 
     predict_button = st.button("Predict Delay Risk", use_container_width=True)
+
+    if predict_button:
+        st.divider()
+        st.subheader("Project Risk Summary")
+
+        l1, l2 = st.columns(2)
+        l1.metric("Schedule Gap", f"{planned_progress - actual_progress:.1f}%")
+        l2.metric("Labor Shortage", f"{((labor_planned - labor_actual) / labor_planned) * 100:.1f}%")
+
+        l3, l4 = st.columns(2)
+        l3.metric("Material Delay", f"{material_delay_days} days")
+        l4.metric("Inspection Failures", inspection_failures)
+
+        st.metric("Cost Pressure", f"{budget_used - actual_progress:.1f}%")
 
 schedule_gap = planned_progress - actual_progress
 labor_shortage_pct = ((labor_planned - labor_actual) / labor_planned) * 100
@@ -277,22 +303,9 @@ with right:
             <div class="small-text">Predicted Delay Risk</div>
             <div class="big-risk {big_risk_class}">{risk:.1f}%</div>
             <div class="risk-pill {risk_class}">{risk_label}</div>
-            <p style="margin-top: 18px; font-size: 16px;">{risk_message}</p>
+            <div style="margin-top: 18px; padding: 12px 14px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); font-size: 16px;">{risk_message}</div>
         </div>
         """, unsafe_allow_html=True)
-
-        st.divider()
-
-        st.subheader("Project Risk Summary")
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Schedule Gap", f"{schedule_gap:.1f}%")
-        m2.metric("Labor Shortage", f"{labor_shortage_pct:.1f}%")
-        m3.metric("Cost Pressure", f"{cost_pressure:.1f}%")
-
-        m4, m5 = st.columns(2)
-        m4.metric("Material Delay", f"{material_delay_days} days")
-        m5.metric("Inspection Failures", inspection_failures)
 
         st.divider()
 
@@ -304,6 +317,65 @@ with right:
         b3.metric("Estimated Cost Exposure", f"${estimated_cost_exposure:,.0f}")
 
         st.caption("Cost exposure is an estimate based on predicted delay days multiplied by an assumed daily delay cost.")
+
+        st.divider()
+
+        try:
+            import shap
+            SHAP_AVAILABLE = True
+        except ImportError:
+            SHAP_AVAILABLE = False
+
+        st.subheader("Risk Driver Contributions")
+
+        shap_df = pd.DataFrame()
+
+        if SHAP_AVAILABLE:
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer.shap_values(new_project)
+
+            if isinstance(shap_values, list):
+                project_shap_values = shap_values[1][0]
+            elif len(shap_values.shape) == 3:
+                project_shap_values = shap_values[0, :, 1]
+            else:
+                project_shap_values = shap_values[0]
+
+            total_abs_shap = abs(project_shap_values).sum()
+
+            if total_abs_shap > 0:
+                contribution_pct = (100 * abs(project_shap_values) / total_abs_shap).round(1)
+            else:
+                contribution_pct = [0 for _ in project_shap_values]
+
+            shap_df = pd.DataFrame({
+                "Risk Driver": [feature_labels[feature] for feature in features],
+                "Contribution %": contribution_pct,
+                "Effect on Risk": ["Increases" if value > 0 else "Decreases" for value in project_shap_values]
+            }).sort_values(by="Contribution %", ascending=False)
+
+        fallback_importance_df = pd.DataFrame({
+            "Risk Driver": [feature_labels[feature] for feature in features],
+            "Importance": model.feature_importances_
+        }).sort_values(by="Importance", ascending=False)
+
+        if SHAP_AVAILABLE and not shap_df.empty:
+            for _, row in shap_df.iterrows():
+                st.markdown(f"""
+                <div class="driver-card">
+                    <b>{row['Risk Driver']}</b> — {row['Contribution %']}% contribution — {row['Effect on Risk']}
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.caption("Showing model-level feature importance instead of project-specific SHAP values.")
+            fallback_importance_df["Importance"] = (fallback_importance_df["Importance"] * 100).round(1)
+
+            for _, row in fallback_importance_df.iterrows():
+                st.markdown(f"""
+                <div class="driver-card">
+                    <b>{row['Risk Driver']}</b> — {row['Importance']}% model importance
+                </div>
+                """, unsafe_allow_html=True)
 
     else:
         st.markdown("""
@@ -320,60 +392,6 @@ if not predict_button:
     st.stop()
 
 
-# SHAP or fallback feature importance section
-try:
-    import shap
-    SHAP_AVAILABLE = True
-except ImportError:
-    SHAP_AVAILABLE = False
-
-st.subheader("Risk Driver Contributions")
-
-shap_df = pd.DataFrame()
-
-if SHAP_AVAILABLE:
-    explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(new_project)
-
-    if isinstance(shap_values, list):
-        project_shap_values = shap_values[1][0]
-    elif len(shap_values.shape) == 3:
-        project_shap_values = shap_values[0, :, 1]
-    else:
-        project_shap_values = shap_values[0]
-
-    total_abs_shap = abs(project_shap_values).sum()
-
-    if total_abs_shap > 0:
-        contribution_pct = (100 * abs(project_shap_values) / total_abs_shap).round(1)
-    else:
-        contribution_pct = [0 for _ in project_shap_values]
-
-    shap_df = pd.DataFrame({
-        "Risk Driver": [feature_labels[feature] for feature in features],
-        "Contribution %": contribution_pct,
-        "Effect on Risk": ["Increases" if value > 0 else "Decreases" for value in project_shap_values]
-    }).sort_values(by="Contribution %", ascending=False)
-
-fallback_importance_df = pd.DataFrame({
-    "Risk Driver": [feature_labels[feature] for feature in features],
-    "Importance": model.feature_importances_
-}).sort_values(by="Importance", ascending=False)
-
-display_shap_df = shap_df
-
-if SHAP_AVAILABLE and not shap_df.empty:
-    for _, row in display_shap_df.iterrows():
-        st.write(
-            f"**{row['Risk Driver']}** — {row['Contribution %']}% contribution — {row['Effect on Risk']}"
-        )
-else:
-    st.caption("Showing model-level feature importance instead of project-specific SHAP values.")
-
-    fallback_importance_df["Importance"] = (fallback_importance_df["Importance"] * 100).round(1)
-
-    for _, row in fallback_importance_df.iterrows():
-        st.write(f"**{row['Risk Driver']}** — {row['Importance']}% model importance")
 
 st.subheader("Recommended Intervention")
 
