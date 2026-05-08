@@ -324,10 +324,10 @@ with right:
 
         b1, b2, b3 = st.columns(3)
         b1.metric("Estimated Delay", f"{estimated_delay_days} days")
-        b2.metric("Daily Cost Assumption", f"${estimated_daily_cost:,.0f}")
+        b2.metric("Predicted Daily Cost", f"${estimated_daily_cost:,.0f}")
         b3.metric("Estimated Cost Exposure", f"${estimated_cost_exposure:,.0f}")
 
-        st.caption("Cost exposure is an estimate based on predicted delay days multiplied by an assumed daily delay cost.")
+        st.caption("Delay days and cost exposure are predicted by a Random Forest regressor trained on historical project outcomes. Daily cost is derived from predicted cost ÷ predicted days.")
 
         st.divider()
 
