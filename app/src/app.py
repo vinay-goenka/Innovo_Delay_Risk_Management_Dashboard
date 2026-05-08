@@ -137,7 +137,6 @@ div[data-testid="stNumberInput"] input {
     color: #93c5fd;
     flex-shrink: 0;
 }
-}
 .action-text {
     color: #d1d5db;
     font-size: 15px;
@@ -158,7 +157,7 @@ st.caption("Predict delay risk based on schedule, labor, materials, inspections,
 
 @st.cache_data
 def load_data():
-    return pd.read_csv("construction_projects.csv")
+    return pd.read_csv("construction_projects_with_outcomes.csv")
 
 df = load_data()
 
@@ -182,11 +181,23 @@ feature_labels = {
     "cost_pressure": "Cost Pressure"
 }
 
+from sklearn.ensemble import RandomForestRegressor
+
 X = df[features]
 y = df["delayed"]
 
 model = RandomForestClassifier(n_estimators=200, random_state=42)
 model.fit(X, y)
+
+# Regressor for delay days
+y_delay = df["actual_delay_days"]
+delay_regressor = RandomForestRegressor(n_estimators=200, random_state=42)
+delay_regressor.fit(X, y_delay)
+
+# Regressor for cost exposure
+y_cost = df["actual_cost_exposure"]
+cost_regressor = RandomForestRegressor(n_estimators=200, random_state=42)
+cost_regressor.fit(X, y_cost)
 
 st.divider()
 
@@ -238,9 +249,9 @@ new_project = pd.DataFrame([{
 
 risk = model.predict_proba(new_project)[0][1] * 100
 
-estimated_delay_days = max(0, round((schedule_gap * 0.8) + (material_delay_days * 0.9) + (inspection_failures * 2)))
-estimated_daily_cost = 15000
-estimated_cost_exposure = estimated_delay_days * estimated_daily_cost
+estimated_delay_days = max(0, int(round(delay_regressor.predict(new_project)[0])))
+estimated_cost_exposure = max(0, int(round(cost_regressor.predict(new_project)[0])))
+estimated_daily_cost = estimated_cost_exposure / max(estimated_delay_days, 1)
 
 improved_labor_actual = min(labor_planned, labor_actual + 15)
 improved_material_delay_days = max(0, material_delay_days - 3)
@@ -390,8 +401,6 @@ st.divider()
 
 if not predict_button:
     st.stop()
-
-
 
 st.subheader("Recommended Intervention")
 
