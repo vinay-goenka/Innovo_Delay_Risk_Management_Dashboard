@@ -10,6 +10,16 @@ st.markdown("""
     padding-top: 1.5rem;
     max-width: 1300px;
 }
+div[data-testid="stImage"] {
+    margin-bottom: -1.5rem;
+}
+div[data-testid="stImage"] img {
+    margin: 0;
+}
+h1 {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
 div[data-testid="stNumberInput"] {
     max-width: 180px;
 }
@@ -151,6 +161,8 @@ div[data-testid="stNumberInput"] input {
 }
 </style>
 """, unsafe_allow_html=True)
+
+st.image("assets/innovo-logo-bgremoved.png", width=180)
 
 st.title("Construction Project Risk Predictor")
 st.caption("Predict delay risk based on schedule, labor, materials, inspections, and budget pressure.")
