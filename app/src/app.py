@@ -1,8 +1,14 @@
 import streamlit as st
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
-st.set_page_config(page_title="Construction Risk Predictor", layout="wide")
+try:
+    import shap
+    SHAP_AVAILABLE = True
+except ImportError:
+    SHAP_AVAILABLE = False
+
+st.set_page_config(page_title="Construction Risk Predictor", page_icon="assets/innovo-logo-bgremoved.png", layout="wide")
 
 st.markdown("""
 <style>
@@ -167,6 +173,10 @@ st.image("assets/innovo-logo-bgremoved.png", width=180)
 st.title("Construction Project Risk Predictor")
 st.caption("Predict delay risk based on schedule, labor, materials, inspections, and budget pressure.")
 
+
+# DATA + MODEL SETUP
+
+
 @st.cache_data
 def load_data():
     return pd.read_csv("construction_projects_with_outcomes.csv")
@@ -193,25 +203,23 @@ feature_labels = {
     "cost_pressure": "Cost Pressure"
 }
 
-from sklearn.ensemble import RandomForestRegressor
-
 X = df[features]
 y = df["delayed"]
 
 model = RandomForestClassifier(n_estimators=200, random_state=42)
 model.fit(X, y)
 
-# Regressor for delay days
 y_delay = df["actual_delay_days"]
 delay_regressor = RandomForestRegressor(n_estimators=200, random_state=42)
 delay_regressor.fit(X, y_delay)
 
-# Regressor for cost exposure
 y_cost = df["actual_cost_exposure"]
 cost_regressor = RandomForestRegressor(n_estimators=200, random_state=42)
 cost_regressor.fit(X, y_cost)
 
 st.divider()
+
+# LAYOUT: INPUTS (LEFT) + PREDICTION (RIGHT)
 
 left, right = st.columns([1, 1.2])
 
@@ -247,6 +255,10 @@ with left:
 
         st.metric("Cost Pressure", f"{budget_used - actual_progress:.1f}%")
 
+
+# COMPUTE FEATURES + PREDICTIONS
+
+
 schedule_gap = planned_progress - actual_progress
 labor_shortage_pct = ((labor_planned - labor_actual) / labor_planned) * 100
 cost_pressure = budget_used - actual_progress
@@ -260,46 +272,47 @@ new_project = pd.DataFrame([{
 }])
 
 risk = model.predict_proba(new_project)[0][1] * 100
-
 estimated_delay_days = max(0, int(round(delay_regressor.predict(new_project)[0])))
 estimated_cost_exposure = max(0, int(round(cost_regressor.predict(new_project)[0])))
 estimated_daily_cost = estimated_cost_exposure / max(estimated_delay_days, 1)
 
-improved_labor_actual = min(labor_planned, labor_actual + 15)
-improved_material_delay_days = max(0, material_delay_days - 3)
-improved_inspection_failures = max(0, inspection_failures - 1)
-improved_labor_shortage_pct = ((labor_planned - improved_labor_actual) / labor_planned) * 100
 
-scenario_project = pd.DataFrame([{
-    "schedule_gap": max(0, schedule_gap - 4),
-    "labor_shortage_pct": improved_labor_shortage_pct,
-    "material_delay_days": improved_material_delay_days,
-    "inspection_failures": improved_inspection_failures,
-    "cost_pressure": max(0, cost_pressure - 3)
-}])
+# COMPUTE SHAP VALUES (used by both Risk Drivers panel AND scenarios)
 
-scenario_risk = model.predict_proba(scenario_project)[0][1] * 100
-risk_reduction = risk - scenario_risk
 
-recommended_actions = []
+shap_df = pd.DataFrame()
 
-if schedule_gap > 10:
-    recommended_actions.append("Recover schedule by adding short-term labor support or extending shifts on critical activities.")
+if SHAP_AVAILABLE:
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(new_project)
 
-if labor_shortage_pct > 20:
-    recommended_actions.append(f"Increase actual labor from {labor_actual} to at least {improved_labor_actual} workers for the next two weeks.")
+    if isinstance(shap_values, list):
+        project_shap_values = shap_values[1][0]
+    elif len(shap_values.shape) == 3:
+        project_shap_values = shap_values[0, :, 1]
+    else:
+        project_shap_values = shap_values[0]
 
-if material_delay_days > 5:
-    recommended_actions.append(f"Escalate procurement and reduce material delay from {material_delay_days} days to {improved_material_delay_days} days through supplier follow-up or backup vendors.")
+    total_abs_shap = abs(project_shap_values).sum()
 
-if inspection_failures > 0:
-    recommended_actions.append("Run a quality-control check before the next inspection to reduce rework and approval delays.")
+    if total_abs_shap > 0:
+        contribution_pct = (100 * abs(project_shap_values) / total_abs_shap).round(1)
+    else:
+        contribution_pct = [0 for _ in project_shap_values]
 
-if cost_pressure > 10:
-    recommended_actions.append("Review cost categories with the largest overruns and freeze non-critical spending until progress catches up.")
+    shap_df = pd.DataFrame({
+        "Risk Driver": [feature_labels[feature] for feature in features],
+        "Contribution %": contribution_pct,
+        "Effect on Risk": ["Increases" if value > 0 else "Decreases" for value in project_shap_values]
+    }).sort_values(by="Contribution %", ascending=False)
 
-if len(recommended_actions) == 0:
-    recommended_actions.append("Continue regular monitoring. No major intervention is currently required.")
+fallback_importance_df = pd.DataFrame({
+    "Risk Driver": [feature_labels[feature] for feature in features],
+    "Importance": model.feature_importances_
+}).sort_values(by="Importance", ascending=False)
+
+
+# RISK CLASSIFICATION
 
 if risk >= 70:
     risk_label = "High Risk"
@@ -316,6 +329,10 @@ else:
     risk_message = "This project appears to be on track."
     risk_class = "risk-pill-low"
     big_risk_class = "big-risk-low"
+
+
+# RIGHT COLUMN: PREDICTION + BUSINESS IMPACT + SHAP DRIVERS
+
 
 with right:
     st.subheader("Prediction")
@@ -343,44 +360,7 @@ with right:
 
         st.divider()
 
-        try:
-            import shap
-            SHAP_AVAILABLE = True
-        except ImportError:
-            SHAP_AVAILABLE = False
-
         st.subheader("Risk Driver Contributions")
-
-        shap_df = pd.DataFrame()
-
-        if SHAP_AVAILABLE:
-            explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(new_project)
-
-            if isinstance(shap_values, list):
-                project_shap_values = shap_values[1][0]
-            elif len(shap_values.shape) == 3:
-                project_shap_values = shap_values[0, :, 1]
-            else:
-                project_shap_values = shap_values[0]
-
-            total_abs_shap = abs(project_shap_values).sum()
-
-            if total_abs_shap > 0:
-                contribution_pct = (100 * abs(project_shap_values) / total_abs_shap).round(1)
-            else:
-                contribution_pct = [0 for _ in project_shap_values]
-
-            shap_df = pd.DataFrame({
-                "Risk Driver": [feature_labels[feature] for feature in features],
-                "Contribution %": contribution_pct,
-                "Effect on Risk": ["Increases" if value > 0 else "Decreases" for value in project_shap_values]
-            }).sort_values(by="Contribution %", ascending=False)
-
-        fallback_importance_df = pd.DataFrame({
-            "Risk Driver": [feature_labels[feature] for feature in features],
-            "Importance": model.feature_importances_
-        }).sort_values(by="Importance", ascending=False)
 
         if SHAP_AVAILABLE and not shap_df.empty:
             for _, row in shap_df.iterrows():
@@ -391,9 +371,10 @@ with right:
                 """, unsafe_allow_html=True)
         else:
             st.caption("Showing model-level feature importance instead of project-specific SHAP values.")
-            fallback_importance_df["Importance"] = (fallback_importance_df["Importance"] * 100).round(1)
+            fallback_importance_display = fallback_importance_df.copy()
+            fallback_importance_display["Importance"] = (fallback_importance_display["Importance"] * 100).round(1)
 
-            for _, row in fallback_importance_df.iterrows():
+            for _, row in fallback_importance_display.iterrows():
                 st.markdown(f"""
                 <div class="driver-card">
                     <b>{row['Risk Driver']}</b> — {row['Importance']}% model importance
@@ -414,12 +395,87 @@ st.divider()
 if not predict_button:
     st.stop()
 
+# SHAP-PRIORITIZED SCENARIO SIMULATION
+def apply_fix(project_row, feature_name):
+    """Apply a realistic 60% correction to a single feature."""
+    fixed = project_row.copy()
+
+    if feature_name == "schedule_gap":
+        fixed["schedule_gap"] = max(0, fixed["schedule_gap"] * 0.4)
+    elif feature_name == "labor_shortage_pct":
+        fixed["labor_shortage_pct"] = max(0, fixed["labor_shortage_pct"] * 0.4)
+    elif feature_name == "material_delay_days":
+        fixed["material_delay_days"] = max(0, fixed["material_delay_days"] * 0.4)
+    elif feature_name == "inspection_failures":
+        fixed["inspection_failures"] = 0
+    elif feature_name == "cost_pressure":
+        fixed["cost_pressure"] = max(0, fixed["cost_pressure"] * 0.4)
+
+    return fixed
+
+# Identify top risk drivers
+label_to_feature = {v: k for k, v in feature_labels.items()}
+
+if SHAP_AVAILABLE and not shap_df.empty:
+    risk_increasing = shap_df[shap_df["Effect on Risk"] == "Increases"].copy()
+    risk_increasing["feature_name"] = risk_increasing["Risk Driver"].map(label_to_feature)
+    top_drivers = risk_increasing.head(3)["feature_name"].tolist()
+else:
+    top_drivers = fallback_importance_df.head(3)["Risk Driver"].map(label_to_feature).tolist()
+
+# Build scenarios
+scenarios = []
+current_state = new_project.iloc[0].to_dict()
+
+for i in range(1, min(4, len(top_drivers) + 1)):
+    fixed_state = current_state.copy()
+    drivers_fixed = top_drivers[:i]
+
+    for driver in drivers_fixed:
+        fixed_state = apply_fix(fixed_state, driver)
+
+    scenario_df = pd.DataFrame([fixed_state])
+    scenario_risk_pct = model.predict_proba(scenario_df)[0][1] * 100
+
+    scenarios.append({
+        "drivers_fixed": [feature_labels[d] for d in drivers_fixed],
+        "risk": scenario_risk_pct,
+        "reduction": risk - scenario_risk_pct
+    })
+
+
+# RECOMMENDED INTERVENTION (rule-based for now)
+
+recommended_actions = []
+
+if schedule_gap > 10:
+    recommended_actions.append("Recover schedule by adding short-term labor support or extending shifts on critical activities.")
+
+if labor_shortage_pct > 20:
+    target_labor = int(labor_actual + (labor_planned - labor_actual) * 0.5)
+    recommended_actions.append(f"Increase actual labor from {labor_actual} to at least {target_labor} workers for the next two weeks.")
+
+if material_delay_days > 5:
+    target_material = max(0, int(material_delay_days * 0.4))
+    recommended_actions.append(f"Escalate procurement and reduce material delay from {material_delay_days} days to {target_material} days through supplier follow-up or backup vendors.")
+
+if inspection_failures > 0:
+    recommended_actions.append("Run a quality-control check before the next inspection to reduce rework and approval delays.")
+
+if cost_pressure > 10:
+    recommended_actions.append("Review cost categories with the largest overruns and freeze non-critical spending until progress catches up.")
+
+if len(recommended_actions) == 0:
+    recommended_actions.append("Continue regular monitoring. No major intervention is currently required.")
+
+
+# RENDER: RECOMMENDED INTERVENTION
 st.subheader("Recommended Intervention")
 
 st.markdown("""
 <div class="section-card">
     <div class="card-title">Priority Actions</div>
-    <div class="card-detail">Recommended actions are generated from the project’s strongest operational risk signals.</div>
+    <div class="card-detail">Recommended actions are generated from the project's strongest operational risk signals.</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -431,78 +487,46 @@ for index, action in enumerate(recommended_actions, start=1):
     </div>
     """, unsafe_allow_html=True)
 
+
+# RENDER: SHAP-PRIORITIZED SCENARIO SIMULATION
 st.subheader("Scenario Simulation")
 
 st.markdown("""
 <div class="section-card">
-    <div class="card-title">What-if management takes corrective action?</div>
-    <div class="card-detail">The simulation estimates how the delay-risk score could change after operational improvements.</div>
+    <div class="card-title">What-if management fixes the top risk drivers?</div>
+    <div class="card-detail">Each scenario fixes the highest-impact SHAP drivers progressively. Corrections reflect realistic 2-week operational improvements (60% reduction per fixed driver).</div>
 </div>
 """, unsafe_allow_html=True)
 
-s1, s2, s3 = st.columns(3)
+if len(scenarios) > 0:
+    cols = st.columns(len(scenarios))
 
-with s1:
+    for i, (col, scenario) in enumerate(zip(cols, scenarios)):
+        with col:
+            drivers_list = ", ".join(scenario["drivers_fixed"])
+            st.markdown(f"""
+            <div class="scenario-card">
+                <div class="scenario-label">Fix Top {i+1} Driver{'s' if i > 0 else ''}</div>
+                <div class="scenario-value">{scenario['risk']:.1f}%</div>
+                <div class="scenario-note">↓ {scenario['reduction']:.1f}% from current</div>
+                <div class="scenario-note" style="margin-top: 10px; font-weight: 600; color: #d1d5db;">{drivers_list}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
     st.markdown(f"""
-    <div class="scenario-card">
-        <div class="scenario-label">Current Risk</div>
-        <div class="scenario-value">{risk:.1f}%</div>
+    <div class="section-card">
+        <div class="card-title">Current Risk: {risk:.1f}%</div>
+        <div class="card-detail">
+            Scenarios above show how risk could drop if management focuses on the highest-impact SHAP drivers identified for this specific project. Drivers are prioritized by their measured contribution to risk, not by generic rules.
+        </div>
     </div>
     """, unsafe_allow_html=True)
-
-with s2:
-    st.markdown(f"""
-    <div class="scenario-card">
-        <div class="scenario-label">Simulated Risk</div>
-        <div class="scenario-value">{scenario_risk:.1f}%</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with s3:
-    st.markdown(f"""
-    <div class="scenario-card">
-        <div class="scenario-label">Potential Reduction</div>
-        <div class="scenario-value">{risk_reduction:.1f}%</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown(f"""
-<div class="section-card">
-    <div class="card-title">Simulation Assumptions</div>
-    <div class="card-detail">
-        Labor increases to {improved_labor_actual}, material delay falls to {improved_material_delay_days} days, inspection failures fall to {improved_inspection_failures}, schedule gap improves by 4%, and cost pressure improves by 3%.
-    </div>
-</div>
-""", unsafe_allow_html=True)
+else:
+    st.info("No risk-increasing drivers detected. Project is on track.")
 
 st.divider()
 
-st.subheader("Suggested Action Plan")
 
-actions = []
-
-if schedule_gap > 10:
-    actions.append("Project is significantly behind schedule. Increase workforce, extend work shifts, or revise milestone planning.")
-
-if labor_shortage_pct > 20:
-    actions.append("Labor shortage is high. Reallocate workers from lower-risk projects or bring in subcontractor support.")
-
-if material_delay_days > 5:
-    actions.append("Material delay is a major issue. Escalate supplier communication and consider backup vendors.")
-
-if inspection_failures > 0:
-    actions.append("Inspection failures are slowing progress. Review quality control before the next inspection.")
-
-if cost_pressure > 10:
-    actions.append("Budget pressure is high. Review spending categories and check for inefficiencies.")
-
-if len(actions) == 0:
-    actions.append("No major warning signs. Continue regular monitoring.")
-
-for action in actions:
-    st.write("•", action)
-
-st.divider()
-
+# TRAINING DATA VIEWER
 with st.expander("View Training Data"):
     st.dataframe(df, use_container_width=True)
