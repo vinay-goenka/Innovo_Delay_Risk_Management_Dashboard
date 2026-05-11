@@ -175,8 +175,6 @@ st.caption("Predict delay risk based on schedule, labor, materials, inspections,
 
 
 # DATA + MODEL SETUP
-
-
 @st.cache_data
 def load_data():
     return pd.read_csv("construction_projects_with_outcomes.csv")
@@ -243,7 +241,7 @@ with left:
 
     if predict_button:
         st.divider()
-        st.subheader("Project Risk Summary")
+        st.subheader("Project Summary")
 
         l1, l2 = st.columns(2)
         l1.metric("Schedule Gap", f"{planned_progress - actual_progress:.1f}%")
@@ -257,7 +255,6 @@ with left:
 
 
 # COMPUTE FEATURES + PREDICTIONS
-
 
 schedule_gap = planned_progress - actual_progress
 labor_shortage_pct = ((labor_planned - labor_actual) / labor_planned) * 100
@@ -278,7 +275,6 @@ estimated_daily_cost = estimated_cost_exposure / max(estimated_delay_days, 1)
 
 
 # COMPUTE SHAP VALUES (used by both Risk Drivers panel AND scenarios)
-
 
 shap_df = pd.DataFrame()
 
@@ -332,7 +328,6 @@ else:
 
 
 # RIGHT COLUMN: PREDICTION + BUSINESS IMPACT + SHAP DRIVERS
-
 
 with right:
     st.subheader("Prediction")
