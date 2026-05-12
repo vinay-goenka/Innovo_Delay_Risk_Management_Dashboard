@@ -2,7 +2,7 @@
 
 An operational analytics dashboard that predicts delay risk for construction projects, explains the drivers behind each prediction, and simulates how risk would change under different management interventions.
 
-Built during my internship at **Innovo Group, Dubai** as a prototype for proactive project oversight.
+Built during my internship at Innovo Group, Dubai as a prototype for the project management team.
 
 ---
 
@@ -23,10 +23,12 @@ Each prediction is project-specific, the dashboard reads the actual operational 
 
 The system combines three machine learning models with explainable AI:
 
-- Random Forest **Classifier** -> Predicts the probability of delay
-- Random Forest **Regressor** (×2) -> Predicts delay duration and cost exposure
-- **SHAP** -> Explains which factors drive each prediction
-- **Rule-based scenario engine** -> Uses SHAP to prioritize which drivers to fix first
+| Component | Purpose |
+|---|---|
+| Random Forest **Classifier** | Predicts the probability of delay |
+| Random Forest **Regressor** (×2) | Predicts delay duration and cost exposure |
+| SHAP | Explains which factors drive each prediction |
+| Rule-based scenario engine | Uses SHAP to prioritize which drivers to fix first |
 
 The classifier outputs a risk percentage. SHAP then breaks that prediction down into per-feature contributions, showing whether each driver is currently increasing or decreasing risk. The scenario simulator uses those rankings to give progressive interventions (fix the top driver, fix the top two, fix the top three) and re-runs the classifier to estimate the resulting risk reduction.
 
@@ -50,8 +52,7 @@ The classifier outputs a risk percentage. SHAP then breaks that prediction down 
 ├── generate_outcomes.py                        # Synthetic outcome data generator
 ├── construction_projects.csv                   # Source project data
 ├── construction_projects_with_outcomes.csv     # Training data (with synthetic outcomes)
-└── assets/
-    └── innovo-logo-bgremoved.png
+└── assets
 ```
 
 ---
@@ -72,10 +73,4 @@ The dashboard opens in your browser at `http://localhost:8501`.
 
 ## Note on Data
 
-Training data uses real operational variables paired with synthetic outcome labels (`actual_delay_days`, `actual_cost_exposure`) generated for prototype purposes. The synthetic outcomes follow construction industry intuition about which signals drive delays. The architecture is designed to retrain on real historical project outcomes when available.
-
----
-
-## About
-
-Developed by **Vinay Goenka** during an internship at Innovo Group Dubai. The project combines machine learning, explainable AI, and operational analytics into a single tool for construction project oversight.
+The dashboard uses real project signals, as mentioned above, but the delay-day and cost-exposure outcomes were generated synthetically for this prototype. The system is built to plug into real historical project data once it's available.
