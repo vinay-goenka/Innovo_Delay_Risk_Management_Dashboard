@@ -8,14 +8,14 @@ Built during my internship at **Innovo Group, Dubai** as a prototype for proacti
 
 ## What It Does
 
-The dashboard takes live project signals — schedule progress, labor levels, material delays, inspection outcomes, and budget pressure — and produces:
+The dashboard takes live project signals (schedule progress, labor levels, material delays, inspection outcomes, and budget pressure) and produces:
 
 - **A delay-risk score** (0–100%) classifying the project as Low, Medium, or High risk
 - **A business impact estimate** showing predicted delay days and total cost exposure in dollars
 - **Driver explanations** identifying which factors are pushing this specific project's risk up or down
 - **Scenario simulations** showing how risk would drop if management addresses the top issues
 
-Each prediction is project-specific — the dashboard reads the actual operational signals and tailors its insights, rather than applying generic rules.
+Each prediction is project-specific, the dashboard reads the actual operational signals and calculates the insights, rather than applying generic rules or hardcoded weights.
 
 ---
 
@@ -23,10 +23,10 @@ Each prediction is project-specific — the dashboard reads the actual operation
 
 The system combines three machine learning models with explainable AI:
 
-Random Forest **Classifier** -> Predicts the probability of delay
-Random Forest **Regressor** (×2) -> Predicts delay duration and cost exposure
-**SHAP** -> Explains which factors drive each prediction
-**Rule-based scenario engine** -> Uses SHAP to prioritize which drivers to fix first
+- Random Forest **Classifier** -> Predicts the probability of delay
+- Random Forest **Regressor** (×2) -> Predicts delay duration and cost exposure
+- **SHAP** -> Explains which factors drive each prediction
+- **Rule-based scenario engine** -> Uses SHAP to prioritize which drivers to fix first
 
 The classifier outputs a risk percentage. SHAP then breaks that prediction down into per-feature contributions, showing whether each driver is currently increasing or decreasing risk. The scenario simulator uses those rankings to give progressive interventions (fix the top driver, fix the top two, fix the top three) and re-runs the classifier to estimate the resulting risk reduction.
 
